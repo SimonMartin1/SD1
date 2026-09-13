@@ -1,19 +1,21 @@
 #include <cstdio>
 #include <cstdlib>
 #include <sys/types.h>
-#include <sys/socket.h> // Funciones principales de sockets
-#include <netinet/in.h> // Estructuras de direcciones de internet
-#include <arpa/inet.h>  // Operaciones de conversión (ej. inet_pton)
-#include <unistd.h>     // Para usar close(), read(), write()
+#include <sys/socket.h> 
+#include <netinet/in.h> 
+#include <arpa/inet.h>  
+#include <unistd.h>     
 #include <cstring>
 #include <string>
+#include <iostream>
+using namespace std;
 
 int main(int argc, char* argv[]){
 
     int socketfd;
     struct sockaddr_in destino;
-    socketfd=socket(AF_INET, SOCK_STREAM,0);
 
+    socketfd=socket(AF_INET, SOCK_STREAM,0);
 
     memset(&destino, 0, sizeof(destino));
     
@@ -26,34 +28,47 @@ int main(int argc, char* argv[]){
     
     if(estado_Conexion == -1){
         printf("error en la Conexion\n");
-        std::exit(-1);
+        exit(-1);
     }
     else{
-        char* msg= "holaaa!";
-        int len_msg = strlen(msg);
+    
+        
+
+        char* msg= "";
+        int len_msg, input;
+        len_msg = strlen(msg);
 
         int estado_Envio = send(socketfd,msg,len_msg,0);
-        
+        bool flag=true;
+
         if(estado_Envio == -1){
             printf("error en el Envio\n");
-            std::exit(-1);
+            exit(-1);
         }
         else{
-            char buffer[100];
-            int bytes_recibidos;
-            
-            bytes_recibidos = recv(socketfd, buffer, sizeof(buffer)-1, 0);
-            
-            if(bytes_recibidos == -1){
-                printf("error en Recepcion\n");
-                std::exit(-1);
-            }
-            else if (bytes_recibidos == 0) {
-            printf("El servidor ha cerrado la conexión.\n");
-            }
-            else{
-                buffer[bytes_recibidos] = '\0';
-                printf("Respuesta recibida: %s\n", buffer);
+            while(flag){
+                
+                char buffer[100];
+                int bytes_recibidos;
+                
+                bytes_recibidos = recv(socketfd, buffer, sizeof(buffer)-1, 0);
+                
+                if(bytes_recibidos == -1){
+                    printf("error en Recepcion\n");
+                    exit(-1);
+                }
+                else if (bytes_recibidos == 0) {
+                printf("El servidor ha cerrado la conexión.\n");
+                }
+                else{
+                    buffer[bytes_recibidos] = '\0';
+                    printf(buffer);
+                    printf("Ingrese el archivo que desea obtener");
+                    scanf("%d ",&input);
+                    if(input==0){
+                        flag=false;
+                    }
+                }
             }
         }
     }
@@ -67,6 +82,14 @@ int main(int argc, char* argv[]){
 
 //Arrancar Contenedor
 //docker run -it --name mis-sockets sockets-cpp-test
+
+// Corre y borra al finalizar 
+//Version Linux
+//docker run -it --rm --name mis-sockets sockets-cpp-test && docker rmi sockets-cpp-test
+
+//Version Windows
+//docker run -it --rm --name mis-sockets sockets-cpp-test; docker rmi sockets-cpp-test
+
 
 //Entrar al servidor en la misma consola
 //    ./servidor 

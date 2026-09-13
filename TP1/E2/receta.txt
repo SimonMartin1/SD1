@@ -1,0 +1,40 @@
+Proceso PrepararTorta
+    // Definición de variables e ingredientes
+    Definir harina, azucar, leche, mantequilla, huevos, polvo_hornear Como Real;
+    Definir horno_precalentado, mezcla_lista Como Logico;
+    
+    // 1. Inicio y recolección de ingredientes
+    ESCRIBIR "Iniciando receta de torta...";
+    mantequilla <- 200; // en gramos
+    azucar <- 250;      // en gramos
+    huevos <- 4;        // unidades
+    harina <- 300;      // en gramos
+    polvo_hornear <- 15; // en gramos
+    leche <- 200;       // en mililitros
+    
+    // 2. Precalentar el horno
+    ESCRIBIR "Precalentando el horno a 180°C...";
+    horno_precalentado <- VERDADERO;
+    
+    // 3. Preparación de la mezcla
+    ESCRIBIR "Batiendo la mantequilla con el azúcar...";
+    // Se agregan los huevos uno a uno
+    ESCRIBIR "Agregando los huevos uno a uno mientras se bate...";
+    
+    ESCRIBIR "Tamizando la harina y el polvo de hornear...";
+    ESCRIBIR "Añadiendo los ingredientes secos alternando con la leche...";
+    
+    mezcla_lista <- VERDADERO;
+    
+    // 4. Cocción
+    Si mezcla_lista Y horno_precalentado Entonces
+        ESCRIBIR "Vertiendo la mezcla en un molde engrasado...";
+        ESCRIBIR "Horneando durante 45 minutos a 180°C...";
+    Sino
+        ESCRIBIR "Error: Faltan pasos previos en la preparación.";
+    FinSi
+    
+    // 5. Finalización
+    ESCRIBIR "Retirando del horno y dejando enfriar...";
+    ESCRIBIR "¡Torta lista para servir!";
+FinProceso
