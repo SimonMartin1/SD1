@@ -23,11 +23,10 @@ namespace fs = filesystem;
 
 class FileCache {
 private:
-    // Estructura interna necesaria para aplicar la política de reemplazo LRU
     struct CacheNode {
-        string filename;     // Nombre del archivo (Clave)
-        string content;      // Contenido del archivo (Valor)
-        size_t total_node_bytes;  // Peso total del nodo para el control de la caché
+        string filename;     
+        string content;      
+        size_t total_node_bytes;  
     };
 
     list<CacheNode> usage_list;
@@ -37,23 +36,23 @@ private:
     size_t current_bytes;
     mutable mutex cache_mutex;
 
-    // Calcula el tamaño real en memoria de un string (Stack + Heap)
+    
     size_t estimate_string_mem(const string& str) const {
         return sizeof(str) + str.capacity();
     }
 
-    // Calcula cuánta memoria consume este nodo sumando el overhead de las estructuras de C++
+    
     size_t calcularEspacioEnMemoria(const string& filename, const string& content) {
         size_t raw_payload = estimate_string_mem(filename) + estimate_string_mem(content);
         
-        // Overhead estimado de punteros de list y unordered_map (arquitectura 64-bits)
+        
         size_t cpp_overhead = 48; 
         
         return raw_payload + cpp_overhead;
     }
 
 public:
-    // Constructor donde definimos el límite en bytes
+    // Límite en bytes
     explicit FileCache(size_t max_bytes_capacity) 
         : max_bytes(max_bytes_capacity), current_bytes(0) {}
 
@@ -63,56 +62,50 @@ public:
         
         auto it = cache_map.find(filename);
         if (it == cache_map.end()) {
-            return false; // Archivo no está en caché
+            return false; 
         }
         
-        // POLÍTICA LRU: Se usó el archivo, lo movemos al principio de la lista
         usage_list.splice(usage_list.begin(), usage_list, it->second);
         
         out_content = it->second->content;
-        return true; // Cache Hit
+        return true; 
     }
 
-    // Insertar o actualizar un archivo en la caché
+    
     void insertarArchivo(const string& filename, const string& content) {
         lock_guard<mutex> lock(cache_mutex);
         
         size_t new_node_bytes = calcularEspacioEnMemoria(filename, content);
         
-        // Si un solo archivo es más grande que toda la caché (512MB), no se guarda
+        // Si un solo archivo es más grande que toda la caché no lo guardamos
         if (new_node_bytes > max_bytes) {
             return; 
         }
 
         auto it = cache_map.find(filename);
         if (it != cache_map.end()) {
-            // El archivo ya existía: actualizamos tamaño global y contenido
             current_bytes -= it->second->total_node_bytes;
             
             it->second->content = content;
             it->second->total_node_bytes = new_node_bytes;
             current_bytes += new_node_bytes;
             
-            // Lo marcamos como recientemente usado
             usage_list.splice(usage_list.begin(), usage_list, it->second);
         } else {
-            // Archivo nuevo: sumamos su tamaño e insertamos al inicio
             current_bytes += new_node_bytes;
             usage_list.push_front({filename, content, new_node_bytes});
             cache_map[filename] = usage_list.begin();
         }
 
-        // POLÍTICA DE REEMPLAZO: Mientras superemos los 512MB, expulsamos el menos usado
         while (current_bytes > max_bytes && !usage_list.empty()) {
-            const auto& oldest_file = usage_list.back(); // El último es el menos usado
+            const auto& oldest_file = usage_list.back(); 
             
             current_bytes -= oldest_file.total_node_bytes;
             cache_map.erase(oldest_file.filename);
-            usage_list.pop_back(); // Desalojo físico
+            usage_list.pop_back();
         }
     }
 
-    // Método para verificar cuánta memoria real consume la caché actualmente
     double obtenerEspacioOcupado() const {
         lock_guard<mutex> lock(cache_mutex);
         return current_bytes / (1024.0 * 1024.0);
@@ -131,10 +124,9 @@ void enviarArchivo(int socket_fd, const string& ruta_archivo, FileCache& cache) 
     if (enCache) {
         printf("\nCache Hit: Leyendo '%s' desde la memoria RAM.\n", ruta_archivo.c_str());
     } else {
-        //printf("\n\n", ruta_archivo);
         printf("\nCache Miss: Buscando '%s' en el directorio...\n", ruta_archivo.c_str());
         
-        // Verificar si el archivo existe físicamente y es un archivo regular
+        // Verificamos si el archivo existe
         if (!fs::exists(ruta_archivo) || !fs::is_regular_file(ruta_archivo)) {
             printf("Error: El archivo '%s' no existe en el servidor.\n", ruta_archivo.c_str());
             streamsize leng_error = -1;
@@ -142,7 +134,6 @@ void enviarArchivo(int socket_fd, const string& ruta_archivo, FileCache& cache) 
             return;
         }
         
-        // Abrir el archivo original en modo binario
         ifstream archivo(ruta_archivo, ios::binary | ios::ate);
         if (!archivo.is_open()) {
             printf("Error: No se pudo abrir el archivo '%s' desde el disco.\n", ruta_archivo.c_str());
@@ -151,7 +142,6 @@ void enviarArchivo(int socket_fd, const string& ruta_archivo, FileCache& cache) 
             return;
         }
         
-        // Obtener el tamaño y leer todo su contenido
         streamsize tamaño_disco = archivo.tellg();
         archivo.seekg(0, ios::beg);
         
@@ -159,23 +149,18 @@ void enviarArchivo(int socket_fd, const string& ruta_archivo, FileCache& cache) 
         archivo.read(&contenido[0], tamaño_disco);
         archivo.close();
         
-        // Guardar en la caché para las próximas peticiones
         cache.insertarArchivo(ruta_archivo, contenido);
     }
 
-    // 2. Enviar el tamaño total del archivo (sea de caché o de disco)
     streamsize leng = contenido.size();
     send(socket_fd, reinterpret_cast<char*>(&leng), sizeof(leng), 0);
     
-    // 3. Enviar el archivo en bloques (Buffer de 1024 bytes) desde el string en RAM
     size_t bytes_enviados_totales = 0;
     char buffer[1024];
     
     while (bytes_enviados_totales < leng) {
-        // Calcular cuántos bytes faltan por enviar en este bloque (máximo 1024)
         size_t bytes_a_enviar = min(sizeof(buffer), leng - bytes_enviados_totales);
         
-        // Copiar los datos del string al buffer temporal
         contenido.copy(buffer, bytes_a_enviar, bytes_enviados_totales);
         
         int bytes_enviados = send(socket_fd, buffer, bytes_a_enviar, 0);

@@ -1,17 +1,17 @@
 #include <cstdio>
 #include <cstdlib>
 #include <sys/types.h>
-#include <sys/socket.h> // Funciones principales de sockets
-#include <netinet/in.h> // Estructuras de direcciones de internet
-#include <arpa/inet.h>  // Operaciones de conversión (ej. inet_pton)
-#include <unistd.h>     // Para usar close(), read(), write()
+#include <sys/socket.h> 
+#include <netinet/in.h> 
+#include <arpa/inet.h>  
+#include <unistd.h>     
 #include <cstring>
 
 int main(void) {
 
-    int socketfd; // file descriptor del socket
-    int cliente; // file descriptor del cliente
-    
+    int socketfd; 
+    int cliente; 
+
     struct sockaddr_in nos;
     struct sockaddr_in ellos;
 
@@ -32,48 +32,51 @@ int main(void) {
 
     listen(socketfd, 10);
 
+    printf("Servidor escuchando en el puerto 8000...\n");
+
     socklen_t addr_len = sizeof(ellos);
-    cliente = accept(socketfd, (struct sockaddr *)&ellos, &addr_len); // descriptor por el que podesos enviar y recibir 
+    cliente = accept(socketfd, (struct sockaddr *)&ellos, &addr_len); 
 
     if(cliente == -1){
         printf("error en accept\n");
         std::exit(-1);
     }
 
+    printf("Cliente conectado: %s\n", inet_ntoa(ellos.sin_addr));
+
     //recibimos el mensaje del cliente
     char buffer[1024];
-    int len, bytes_recibidos;
+    int bytes_recibidos;
 
-
-    bytes_recibidos = recv(cliente, buffer,sizeof(buffer)-1, 0);
+    bytes_recibidos = recv(cliente, buffer, sizeof(buffer)-1, 0);
 
     if(bytes_recibidos == -1){
-        printf("Error en Recepcion del Serve\n");
+        printf("Error en Recepcion del Servidor\n");
+        close(cliente);
+        close(socketfd);
         std::exit(-1);
     }
     else if (bytes_recibidos == 0) {
-        printf("El cliente ha cerrado la conexión.\n");
+        printf("El cliente ha cerrado la conexion.\n");
     }
     else{
         buffer[bytes_recibidos] = '\0';
         printf("Mensaje recibido: %s\n", buffer);
+
+        //enviamos el eco al cliente (solo si realmente llego algo)
+        int bytes_enviados;
+        bytes_enviados = send(cliente, buffer, bytes_recibidos, 0);
+
+        if(bytes_enviados == -1){
+            printf("error en el Envio\n");
+            std::exit(-1);
+        }else if(bytes_enviados == 0){
+            printf("El cliente ha cerrado la conexion.\n");
+        }
+        else{
+            printf("Mensaje enviado: %s\n", buffer);
+        }
     }
-
-    //enviamos el mensaje al cliente
-    int bytes_enviados;
-
-    bytes_enviados = send(cliente, buffer, sizeof(buffer)-1, 0);
-
-    if(bytes_enviados == -1){
-        printf("error en el Envio\n");
-        std::exit(-1);
-    }else if(bytes_enviados == 0){
-        printf("El cliente ha cerrado la conexión.\n");
-    }
-    else{
-        printf("Mensaje enviado: %s\n", buffer);
-    }
-
 
     close(cliente);
     close(socketfd);
