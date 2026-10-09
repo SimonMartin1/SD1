@@ -1,0 +1,83 @@
+Script started on 2026-10-09 13:00:48+00:00 [TERM="xterm" TTY="/dev/pts/1" COLUMNS="106" LINES="19"]
+# rpcinfo -p | grep 824395111
+ 824395111    1   udp  63640
+ 824395111    1   tcp  50674
+# setpriv --reuid=65534 --regid=65534 --clear-groups sleep 300 &
+pgrep -a sleep
+./cliente localhost pid $!
+pgrep -a sleep# 72 sleep 300
+# [CLIENTE] Solicitando finalizar PID 72 en localhost
+[CLIENTE] Codigo: 0 | Finalizados: 1 | Proceso 72 finalizado correctamente
+[1] + Terminated                 setpriv --reuid=65534 --regid=65534 --clear-groups sleep 300
+# setpriv --reuid=65534 --regid=65534 --clear-groups sleep 300 &
+./cliente localhost nombre sleep# pgrep: unrecognized option '--reuid=65534'
+
+Usage:
+ pgrep [options] <pattern>
+
+Options:
+ -d, --delimiter <string>  specify output delimiter
+ -l, --list-name           list PID and process name
+ -a, --list-full           list PID and full command line
+ -v, --inverse             negates the matching
+ -w, --lightweight         list all TID
+ -c, --count               count of matching processes
+ -f, --full                use full process name to match
+ -g, --pgroup <PGID,...>   match listed process group IDs
+ -G, --group <GID,...>     match real group IDs
+ -i, --ignore-case         match case insensitively
+ -n, --newest              select most recently started
+ -o, --oldest              select least recently started
+ -O, --older <seconds>     select where older than seconds
+ -P, --parent <PPID,...>   match only child processes of the given parent
+ -s, --session <SID,...>   match session IDs
+ -t, --terminal <tty,...>  match by controlling terminal
+ -u, --euid <ID,...>       match by effective IDs
+ -U, --uid <ID,...>        match by real IDs
+ -x, --exact               match exactly with the command name
+ -F, --pidfile <file>      read PIDs from file
+ -L, --logpidfile          fail if PID file is not locked
+ -r, --runstates <state>   match runstates [D,S,Z,...]
+ -A, --ignore-ancestors    exclude our ancestors from results
+ --cgroup <grp,...>        match by cgroup v2 names
+ --ns <PID>                match the processes that belong to the same
+                           namespace as <pid>
+ --nslist <ns,...>         list which namespaces will be considered for
+                           the --ns option.
+                           Available namespaces: ipc, mnt, net, pid, user, uts
+
+ -h, --help     display this help and exit
+ -V, --version  output version information and exit
+
+For more details see pgrep(1).
+^C
+[1] + Done(2)                    pgrep -a sleepsetpriv --reuid=65534 --regid=65534 --clear-groups sleep 300
+# setpriv --reuid=65534 --regid=65534 --clear-groups sleep 300 &
+./cliente localhost nombre sleep# ^[[D     
+[CLIENTE] Solicitando finalizar proceso 'slee' en localhost
+[CLIENTE] Codigo: 1 | Finalizados: 0 | No existe ningun proceso con ese nombre
+# ./cliente localhost pid 999999
+./cliente localhost nombre noexiste[CLIENTE] Solicitando finalizar PID 999999 en localhost
+[CLIENTE] Codigo: 1 | Finalizados: 0 | El proceso 999999 no existe
+# sleep 300 &
+ps -o pid,user,cmd -p $!
+./cliente localhost pid $!# Uso: ./cliente <host> pid <PID>
+     ./cliente <host> nombre <nombre>
+    PID USER     CMD
+[2] + Done(2)                    ./cliente localhost nombre noexistesleep 300
+# sleep 300 &
+ps -o pid,user,cmd -p $!
+./cliente localhost pid $!# Uso: ./cliente <host> pid <PID>
+     ./cliente <host> nombre <nombre>
+    PID USER     CMD
+[2] + Done(2)                    ./cliente localhost pid ${!}sleep 300
+# sleep 300 &
+ps -o pid,user,cmd -p $!
+./cliente localhost pid $!# Uso: ./cliente <host> pid <PID>
+     ./cliente <host> nombre <nombre>
+    PID USER     CMD
+[2] + Done(2)                    ./cliente localhost pid ${!}sleep 300
+# ^C
+# exit
+
+Script done on 2026-10-09 13:10:43+00:00 [COMMAND_EXIT_CODE="130"]

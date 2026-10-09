@@ -1,0 +1,19 @@
+[SERVIDOR] Solicitud: finalizar PID 54
+[SERVIDOR] Resultado: Proceso 54 finalizado correctamente
+[SERVIDOR] Solicitud: finalizar proceso de nombre 'sleep'
+[SERVIDOR]   Proceso 58 finalizado correctamente
+[SERVIDOR] Resultado: 1 proceso(s) 'sleep' finalizado(s) correctamente
+[SERVIDOR] Solicitud: finalizar PID 999999
+[SERVIDOR] Resultado: El proceso 999999 no existe
+[SERVIDOR] Solicitud: finalizar proceso de nombre 'noexiste'
+[SERVIDOR] Resultado: No existe ningun proceso con ese nombre
+[SERVIDOR] Solicitud: finalizar PID 62
+[SERVIDOR] Resultado: Permiso denegado para finalizar el proceso 62
+[SERVIDOR] Solicitud: finalizar PID 650
+[SERVIDOR] Resultado: El proceso 650 no existe
+[SERVIDOR] Solicitud: finalizar PID 72
+[SERVIDOR] Resultado: Proceso 72 finalizado correctamente
+[SERVIDOR] Solicitud: finalizar proceso de nombre 'slee'
+[SERVIDOR] Resultado: No existe ningun proceso con ese nombre
+[SERVIDOR] Solicitud: finalizar PID 999999
+[SERVIDOR] Resultado: El proceso 999999 no existe
