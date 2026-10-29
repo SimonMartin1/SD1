@@ -7,6 +7,7 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
+#include <system_error>
 
 extern "C" {
     #include "myfs.h" // Cabecera generada por rpcgen
@@ -144,6 +145,9 @@ int main(int argc, char* argv[]) {
                     fs::path p(directorio_destino);
                     std::error_code fs_error;
                     bool destination_is_directory = fs::is_directory(p, fs_error);
+                    if (fs_error == std::errc::no_such_file_or_directory) {
+                        fs_error.clear();
+                    }
                     if (fs_error) {
                         fprintf(stderr, "Error al consultar el destino: %s\n",
                                 fs_error.message().c_str());

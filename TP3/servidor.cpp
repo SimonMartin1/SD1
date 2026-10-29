@@ -10,9 +10,18 @@
 #include <algorithm>
 #include <limits>
 #include <system_error>
+#include <condition_variable>
+#include <exception>
+#include <functional>
+#include <memory>
+#include <queue>
+#include <thread>
+#include <vector>
 
 extern "C" {
     #include "myfs.h"
+    #include <netinet/in.h>
+    #include <rpc/pmap_clnt.h>
 }
 
 using namespace std;
@@ -175,9 +184,69 @@ public:
     }
 };
 
+struct RpcJob {
+    svc_req request{};
+    SVCXPRT* transport = nullptr;
+    rpcproc_t procedure = 0;
+    LockRequest lock_request{};
+    FileRequest file_request{};
+};
+
+class RpcThreadPool {
+    mutex mtx;
+    condition_variable ready;
+    queue<function<void()>> jobs;
+    vector<thread> workers;
+    bool stopping = false;
+
+    void worker_loop() {
+        while (true) {
+            function<void()> job;
+            {
+                unique_lock<mutex> lock(mtx);
+                ready.wait(lock, [this] { return stopping || !jobs.empty(); });
+                if (stopping && jobs.empty()) return;
+                job = std::move(jobs.front());
+                jobs.pop();
+            }
+            job();
+        }
+    }
+
+public:
+    explicit RpcThreadPool(size_t worker_count) {
+        workers.reserve(worker_count);
+        for (size_t i = 0; i < worker_count; ++i) {
+            workers.emplace_back([this] { worker_loop(); });
+        }
+    }
+
+    ~RpcThreadPool() {
+        {
+            lock_guard<mutex> lock(mtx);
+            stopping = true;
+        }
+        ready.notify_all();
+        for (thread& worker : workers) {
+            if (worker.joinable()) worker.join();
+        }
+    }
+
+    bool enqueue(function<void()> job) {
+        {
+            lock_guard<mutex> lock(mtx);
+            if (stopping) return false;
+            jobs.push(std::move(job));
+        }
+        ready.notify_one();
+        return true;
+    }
+};
+
 
 LockManager lock_manager;
 FileCache server_cache(512 * 1024 * 1024);
+RpcThreadPool rpc_workers(16);
 const fs::path RUTA_BASE = "/my_FS/Archivos";
 
 bool resolve_file_path(const char* file_name, fs::path& resolved_path) {
@@ -213,6 +282,9 @@ extern "C" {
         if (argp == nullptr || result == nullptr || argp->lock_name == nullptr ||
             argp->client_id == nullptr) return FALSE;
         *result = lock_manager.acquire(argp->lock_name, argp->client_id);
+        printf("[RPC] ACQUIRE_LOCK lock='%s' cliente='%s' resultado=%d\n",
+               argp->lock_name, argp->client_id, *result);
+        fflush(stdout);
         return TRUE;
     }
 
@@ -227,6 +299,9 @@ extern "C" {
         if (argp == nullptr || result == nullptr || argp->lock_name == nullptr ||
             argp->client_id == nullptr) return FALSE;
         *result = lock_manager.release(argp->lock_name, argp->client_id);
+        printf("[RPC] RELEASE_LOCK lock='%s' cliente='%s' resultado=%d\n",
+               argp->lock_name, argp->client_id, *result);
+        fflush(stdout);
         return TRUE;
     }
 
@@ -234,6 +309,9 @@ extern "C" {
         if (argp == nullptr || result == nullptr || argp->lock_name == nullptr ||
             argp->client_id == nullptr) return FALSE;
         *result = lock_manager.cancel(argp->lock_name, argp->client_id);
+        printf("[RPC] CANCEL_LOCK lock='%s' cliente='%s' resultado=%d\n",
+               argp->lock_name, argp->client_id, *result);
+        fflush(stdout);
         return TRUE;
     }
 
@@ -242,6 +320,8 @@ extern "C" {
         *result = nullptr;
         string status = lock_manager.get_status();
         *result = strdup(status.c_str());
+        printf("[RPC] GET_SERVER_STATUS\n");
+        fflush(stdout);
         return *result != nullptr;
     }
 
@@ -254,6 +334,7 @@ extern "C" {
         fs::path file_path;
         if (!resolve_file_path(argp->file_name, file_path)) {
             printf("[RPC] Archivo no encontrado o ruta no permitida.\n");
+            fflush(stdout);
             return TRUE;
         }
 
@@ -263,8 +344,10 @@ extern "C" {
         bool enCache = server_cache.obtenerArchivo(ruta_archivo, contenido);
         if (enCache) {
             printf("[RPC] Cache Hit: '%s'.\n", ruta_archivo.c_str());
+            fflush(stdout);
         } else {
             printf("[RPC] Cache Miss: Buscando '%s'...\n", ruta_archivo.c_str());
+            fflush(stdout);
             ifstream archivo(ruta_archivo, ios::binary | ios::ate);
             if (!archivo.is_open()) {
                 return TRUE;
@@ -294,9 +377,158 @@ extern "C" {
         return TRUE;
     }
 
-    // Callback necesario para liberar la memoria asignada dinámicamente en RPC multihilo
-    int myfs_prog_1_freeresult(SVCXPRT *transp, xdrproc_t xdr_result, caddr_t result) {
-        xdr_free(xdr_result, result);
+    void free_rpc_arguments(const shared_ptr<RpcJob>& job) {
+        switch (job->procedure) {
+        case ACQUIRE_LOCK:
+        case CHECK_LOCK:
+        case RELEASE_LOCK:
+        case CANCEL_LOCK:
+            xdr_free((xdrproc_t)xdr_LockRequest, (char*)&job->lock_request);
+            break;
+        case GET_FILE:
+            xdr_free((xdrproc_t)xdr_FileRequest, (char*)&job->file_request);
+            break;
+        default:
+            break;
+        }
+    }
+
+    void execute_rpc_job(const shared_ptr<RpcJob>& job) {
+        switch (job->procedure) {
+        case ACQUIRE_LOCK:
+        case CHECK_LOCK:
+        case RELEASE_LOCK:
+        case CANCEL_LOCK: {
+            int result = LOCK_WAITING;
+            bool_t success = FALSE;
+            switch (job->procedure) {
+            case ACQUIRE_LOCK:
+                success = acquire_lock_1_svc(&job->lock_request, &result, &job->request);
+                break;
+            case CHECK_LOCK:
+                success = check_lock_1_svc(&job->lock_request, &result, &job->request);
+                break;
+            case RELEASE_LOCK:
+                success = release_lock_1_svc(&job->lock_request, &result, &job->request);
+                break;
+            case CANCEL_LOCK:
+                success = cancel_lock_1_svc(&job->lock_request, &result, &job->request);
+                break;
+            }
+            if (!success || !svc_sendreply(job->transport, (xdrproc_t)xdr_int,
+                                           (char*)&result)) {
+                svcerr_systemerr(job->transport);
+            }
+            break;
+        }
+        case GET_SERVER_STATUS: {
+            char* result = nullptr;
+            if (!get_server_status_1_svc(nullptr, &result, &job->request) ||
+                !svc_sendreply(job->transport, (xdrproc_t)xdr_wrapstring,
+                               (char*)&result)) {
+                svcerr_systemerr(job->transport);
+            }
+            xdr_free((xdrproc_t)xdr_wrapstring, (char*)&result);
+            break;
+        }
+        case GET_FILE: {
+            FileResponse result{};
+            if (!get_file_1_svc(&job->file_request, &result, &job->request) ||
+                !svc_sendreply(job->transport, (xdrproc_t)xdr_FileResponse,
+                               (char*)&result)) {
+                svcerr_systemerr(job->transport);
+            }
+            xdr_free((xdrproc_t)xdr_FileResponse, (char*)&result);
+            break;
+        }
+        default:
+            svcerr_noproc(job->transport);
+            break;
+        }
+    }
+
+    void myfs_prog_1(struct svc_req *rqstp, SVCXPRT *transp) {
+        if (rqstp->rq_proc == NULLPROC) {
+            if (!svc_sendreply(transp, (xdrproc_t)xdr_void, nullptr)) {
+                svcerr_systemerr(transp);
+            }
+            return;
+        }
+
+        xdrproc_t argument_xdr = nullptr;
+        caddr_t argument = nullptr;
+        shared_ptr<RpcJob> job;
+        try {
+            job = make_shared<RpcJob>();
+        } catch (const exception& error) {
+            fprintf(stderr, "No se pudo reservar el trabajo RPC: %s\n", error.what());
+            svcerr_systemerr(transp);
+            return;
+        }
+
+        job->request = *rqstp;
+        job->transport = transp;
+        job->procedure = rqstp->rq_proc;
+        switch (rqstp->rq_proc) {
+        case ACQUIRE_LOCK:
+        case CHECK_LOCK:
+        case RELEASE_LOCK:
+        case CANCEL_LOCK:
+            argument_xdr = (xdrproc_t)xdr_LockRequest;
+            argument = (caddr_t)&job->lock_request;
+            break;
+        case GET_SERVER_STATUS:
+            argument_xdr = (xdrproc_t)xdr_void;
+            break;
+        case GET_FILE:
+            argument_xdr = (xdrproc_t)xdr_FileRequest;
+            argument = (caddr_t)&job->file_request;
+            break;
+        default:
+            svcerr_noproc(transp);
+            return;
+        }
+
+        if (!svc_getargs(transp, argument_xdr, argument)) {
+            svcerr_decode(transp);
+            free_rpc_arguments(job);
+            return;
+        }
+
+        if (!rpc_workers.enqueue([job] {
+                try {
+                    execute_rpc_job(job);
+                } catch (const exception& error) {
+                    fprintf(stderr, "Error procesando solicitud RPC: %s\n", error.what());
+                    svcerr_systemerr(job->transport);
+                } catch (...) {
+                    fprintf(stderr, "Error desconocido procesando solicitud RPC.\n");
+                    svcerr_systemerr(job->transport);
+                }
+                free_rpc_arguments(job);
+            })) {
+            free_rpc_arguments(job);
+            svcerr_systemerr(transp);
+        }
+    }
+}
+
+int main() {
+    pmap_unset(MYFS_PROG, MYFS_VERS);
+    SVCXPRT* transport = svctcp_create(RPC_ANYSOCK, 0, 0);
+    if (transport == nullptr) {
+        fprintf(stderr, "No se pudo crear el transporte TCP RPC.\n");
         return 1;
     }
+    if (!svc_register(transport, MYFS_PROG, MYFS_VERS, myfs_prog_1, IPPROTO_TCP)) {
+        fprintf(stderr, "No se pudo registrar el servicio RPC.\n");
+        return 1;
+    }
+
+    printf("Servidor RPC multihilo activo (programa 0x%x, version %d).\n",
+           MYFS_PROG, MYFS_VERS);
+    fflush(stdout);
+    svc_run();
+    fprintf(stderr, "El bucle RPC finalizo inesperadamente.\n");
+    return 1;
 }
