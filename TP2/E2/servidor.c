@@ -10,10 +10,10 @@
 #include <time.h>
 #include "proceso.h"
 
-static respuesta res;           /* resultado estatico devuelto a rpcgen */
+static respuesta res;           
 static char msg[MAX_MSG];
 
-/* Un proceso zombie (terminado, pendiente de wait del padre) cuenta como finalizado */
+
 static int esta_vivo(pid_t pid)
 {
     char ruta[64], linea[512];
@@ -25,7 +25,7 @@ static int esta_vivo(pid_t pid)
     if (!f) return 0;
     if (!fgets(linea, sizeof linea, f)) { fclose(f); return 0; }
     fclose(f);
-    p = strrchr(linea, ')');            /* el estado va despues del nombre "(comm)" */
+    p = strrchr(linea, ')');          
     return !(p && p[2] == 'Z');
 }
 
@@ -34,7 +34,7 @@ static int existe(pid_t pid)
     return kill(pid, 0) == 0 || errno == EPERM;
 }
 
-/* Envia SIGTERM y espera hasta ~2 s a que el proceso termine. Devuelve un 'estado'. */
+
 static estado terminar(pid_t pid, char *detalle, size_t n)
 {
     struct timespec t = {0, 100 * 1000 * 1000};

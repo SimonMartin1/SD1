@@ -10,7 +10,7 @@
 #include <system_error>
 
 extern "C" {
-    #include "myfs.h" // Cabecera generada por rpcgen
+    #include "myfs.h"
 }
 
 using namespace std;

@@ -28,16 +28,16 @@ using namespace std;
 namespace fs = filesystem;
 
 
-// Estructura de LockManager para proteger datos concurrentes
+
 struct LockState {
     bool is_locked = false;
     string owner_client_id = "";
-    list<string> waitlist; // Lista de clientes en espera
+    list<string> waitlist; 
 };
 
 class LockManager {
     unordered_map<string, LockState> locks;
-    mutex mtx; // Protege de accesos concurrentes
+    mutex mtx;
 public:
     int acquire(const string& lock, const string& client) {
         lock_guard<mutex> lk(mtx);

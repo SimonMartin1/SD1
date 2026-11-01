@@ -1,59 +1,59 @@
-// cliente.cpp
+// Uso: ./cliente <host>
 #include <iostream>
-#include <cstdlib>
-using namespace std;
-// Envolvemos el header generado por rpcgen para compatibilidad con C++
 extern "C" {
     #include "calculadora.h"
 }
+using namespace std;
 
 int main(int argc, char *argv[]) {
-    CLIENT *clnt;
-    int *resultado;
-    operandos args;
-
-    if (argc != 4) {
-        std::cerr << "Uso: " << argv[0] << " <host> <num1> <num2>" << std::endl;
+    if (argc != 2) {
+        cerr << "Uso: " << argv[0] << " <host>" << endl;
         return 1;
     }
 
-    char* host = argv[1];
-    args.a = std::atoi(argv[2]);
-    args.b = std::atoi(argv[3]);
-
-    // 1. Crear el manejador del cliente (usando UDP en este caso)
-    clnt = clnt_create(host, CALCULADORA_PROG, CALCULADORA_VERS, "udp");
+    CLIENT *clnt = clnt_create(argv[1], CALCULADORA_PROG, CALCULADORA_VERS, "tcp");
     if (clnt == nullptr) {
-        clnt_pcreateerror(host);
+        clnt_pcreateerror(argv[1]);
         return 1;
     }
 
-    // 2. Llamar a la función SUMA remota
-    // rpcgen añade el sufijo _1 (por la versión 1)
-    resultado = suma_1(&args, clnt);
-    if (resultado == nullptr) {
-        clnt_perror(clnt, "Fallo en la llamada a SUMA");
-    } else {
-        std::cout << "Resultado SUMA: " << *resultado << std::endl;
-    }
+    int opcion;
+    do {
+        cout << "\n=== Calculadora RPC (servidor: " << argv[1] << ") ===\n"
+             << "1) Suma\n2) Resta\n3) Multiplicacion\n4) Division\n0) Salir\n"
+             << "Opcion: ";
+        if (!(cin >> opcion)) break;
+        if (opcion == 0) break;
+        if (opcion < 1 || opcion > 4) {
+            cout << "Opcion invalida\n";
+            continue;
+        }
 
-    // 3. Llamar a la función RESTA remota
-    resultado = resta_1(&args, clnt);
-    if (resultado == nullptr) {
-        clnt_perror(clnt, "Fallo en la llamada a RESTA");
-    } else {
-        std::cout << "Resultado RESTA: " << *resultado << std::endl;
-    }
+        operandos args;
+        cout << "Primer operando: ";
+        if (!(cin >> args.a)) break;
+        cout << "Segundo operando: ";
+        if (!(cin >> args.b)) break;
 
-    // 4. Limpiar recursos
+        respuesta *r = nullptr;
+        const char *simbolo = "";
+        switch (opcion) {
+            case 1: r = suma_1(&args, clnt);           simbolo = "+"; break;
+            case 2: r = resta_1(&args, clnt);          simbolo = "-"; break;
+            case 3: r = multiplicacion_1(&args, clnt); simbolo = "*"; break;
+            case 4: r = division_1(&args, clnt);       simbolo = "/"; break;
+        }
+
+        if (r == nullptr) {
+            clnt_perror(clnt, "Fallo la llamada RPC");
+        } else if (r->error) {
+            cout << "[CLIENTE] Error: division por cero" << endl;
+        } else {
+            cout << "[CLIENTE] " << args.a << " " << simbolo << " " << args.b
+                 << " = " << r->valor << endl;
+        }
+    } while (true);
+
     clnt_destroy(clnt);
     return 0;
 }
-
-// docker build -t rpc-dev-env .
-// docker run -it --rm -v ${PWD}:/app rpc-dev-env
-// rpcgen -C calculadora.x
-// g++ -I/usr/include/tirpc servidor.cpp calculadora_svc.c calculadora_xdr.c -o servidor -ltirpc
-// g++ -I/usr/include/tirpc cliente.cpp calculadora_clnt.c calculadora_xdr.c -o cliente -ltirpc
-// ./servidor &
-// ./cliente localhost 15 7

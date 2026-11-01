@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /my_FS
 COPY myfs.x servidor.cpp cliente.cpp ./
-COPY receta.txt ./Archivos/
+COPY receta.txt informe.txt ./Archivos/
 
 RUN rpcgen -C -M -h myfs.x -o myfs.h && \
     rpcgen -C -M -c myfs.x -o myfs_xdr.c && \
@@ -31,13 +31,3 @@ RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/usr/local/bin/servidor"]
 
-
-# docker build -t tp3-rpc .
-# docker run -d --rm --name mi-servidor-rpc tp3-rpc
-# Ver el estado
-# docker exec -it mi-servidor-rpc cliente 127.0.0.1 Cliente1 status
-# Probar el lock con dos clientes
-# docker exec -it mi-servidor-rpc cliente 127.0.0.1 Cliente1 test_lock receta.txt 15
-# docker exec -it mi-servidor-rpc cliente 127.0.0.1 Cliente2 test_lock receta.txt 5
-#Descargar el archivo solicitado
-#docker exec -it mi-servidor-rpc cliente 127.0.0.1 Cliente3 get receta.txt /
